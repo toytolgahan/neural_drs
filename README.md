@@ -1,4 +1,5 @@
 <h1>text2drs NEURAL SEMANTIC PARSER</h1>
+<div>
 <h2>The project</h2>
 The general aim is to convert natural language sentences into formal language expressions. There are two philosophical motivations behind this project. 
 <ol>
@@ -6,14 +7,16 @@ The general aim is to convert natural language sentences into formal language ex
     <li>to represent the <i>approximately</i> systematic and rigid aspects of natural language semantics, in addition to representing the flexible side of natural language semantics that a connectionist system provides.</li>
 </ol>
 <h3>Note</h3><p>Why do I defend purely connectionist model? <a href="https://open.metu.edu.tr/handle/11511/96733"> A DEFENSE OF MEANING ELIMINATIVISM: A CONNECTIONIST APPROACH [Ph.D. - Doctoral Program]. Middle East Technical University.</a></p>
-
+</div>
+<div>
 <h2>DRT</h2>
 DRT is a meaning representation formalism which is found more useful than first-order logic representations. In representing two semantic phenomena, it is advantageous over FOL.
 <ul>
     <li>quantifier-variable bindings </li>
     <li>presuppositions</li>
 </ul>
-
+</div>
+<div>
 <h2>Experiments</h2>
 You may simply run <code> bash ./pipelines/main.sh </code>
 Here is the pipeline:
@@ -23,8 +26,8 @@ Here is the pipeline:
     <li><code>python ./src/pickles_data.py</code> &rarr; Converted to input sentence encodings and a set of contextual vectors for target DRS expressions through pickles-data.py</li>
     <li><code>python3 ./src/text2drs.py</code> &rarr; Trained to maximize the cosine similarity between output vectors and target vectors </li>
 </ul>
-    
-    
+</div>
+<div>
 <h2> The encoder </h2>
 <div style="display:flex; ">
     <div style="padding:2px; margin: 2% 2% 2% 0%;"> word sequence </div>
@@ -37,9 +40,9 @@ Here is the pipeline:
     <div style="padding:2px; margin: 2% 0% 2% 0%;"> &rarr;</div> 
     <div style="padding:2px; margin: 2% 2% 2% 0%;"> context </div>
 </div>
-
+</div>
     
-    
+<div>
 <h2>The decoder </h2>
 <div style="display:flex; padding:2%; ">
     <div>
@@ -53,8 +56,8 @@ Here is the pipeline:
     <div style="padding:2px; margin: 2% 0% 2% 0%;"> &rarr;</div> 
     <div style="padding:2px; margin: 2% 2% 2% 0%;"> next token </div>
 </div>
-    
-    
+</div>
+<div>
 <h2> The Dataset </h2>
 <div><h3>Input:</h3> A text from Gröningen Meaning Bank
     <div style="border: 1px solid black; padding:2%;">
@@ -269,10 +272,9 @@ them just be kids. Amy Katz Narrates. 
         </ul>
     </div>
     </div>
+</div>
     
-    
-    
-    
+<div>
     <h2>Contextual target vectors</h2>
 <div style="display:flex; padding:2%;">
     <div style="border: 1px dashed white; text-align:center; padding:2% 2% 0% 0%; color:gray;">Gröningen <br> Meaning <br> Bank </div>
@@ -291,7 +293,8 @@ them just be kids. Amy Katz Narrates. 
     <p>
         In the softmax-based model, the size of the last vector is the vocabulary. 
     </div>
-
+</div>
+<div>
 <h2>Output sequence</h2>
 <p> yhat @ concepts.T results in the similarity matrix <br/> then get the index of maximum elements </p>
 <div style="display:flex; padding:5px;">
@@ -310,6 +313,8 @@ them just be kids. Amy Katz Narrates. 
     <div style="padding: 0.5% 0 0 0;">max elements indexes</div>
     <div style="font-size:20px; padding:5px;"> ] </div>
 </div>
+</div>
+<div>
 <h2>Needs revision!</h2>
 The oncepts matrix needs to be revised for <u>two reasons</u>! 
 <ol>
@@ -327,4 +332,5 @@ The oncepts matrix needs to be revised for <u>two reasons</u>!
             </li>
         </ul>
     </li>
-    
+</ol>
+</div>
