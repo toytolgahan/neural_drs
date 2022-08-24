@@ -1,4 +1,7 @@
 #!/bin/bash
+mkdir ../models
+mkdir ../data
+
 echo downloading the data from Gröningen Meaning Bank...
 bash download_data.sh
 wait
