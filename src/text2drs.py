@@ -1,5 +1,5 @@
 import random
-import spacy
+import string
 import pickle
 from torch import linalg as LA
 import torch
@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader, random_split
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+import spacy
 
 class encoder(nn.Module):
     def __init__(self, vocab_size, embed_size, hidden_size, num_layers, p):
@@ -25,7 +26,6 @@ class encoder(nn.Module):
         hidden = torch.randn((self.num_layers,batch_size,self.hidden_size))
         cell = torch.randn(hidden.shape)
         outputs = torch.zeros(seq_len,1, batch_size, self.hidden_size)
-        print("outputs {} ".format(outputs.shape))
         hiddens = torch.zeros(seq_len, self.num_layers, batch_size, self.hidden_size)
         cells   = torch.zeros(seq_len,self.num_layers, batch_size, self.hidden_size)
         embedding = embedding.squeeze(0)
@@ -36,11 +36,10 @@ class encoder(nn.Module):
             hiddens[n] = hidden
             cells[n] = cell
         return outputs, hiddens, cells
-
-
-class decoder(nn.Module):
-    def __init__(self, embed_size, hidden_size, num_layers,p,encoderLength):
-        super(decoder, self).__init__()
+    
+class decoder1(nn.Module):
+    def __init__(self, embed_size, hidden_size, num_layers,p):
+        super(decoder1, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.embed_size = embed_size
@@ -50,50 +49,97 @@ class decoder(nn.Module):
         self.attn_combine = nn.Linear(self.hidden_size*2, self.hidden_size)
         ####
         self.rnn = nn.LSTM(embed_size, hidden_size, num_layers, dropout=p)
-        
+
     def forward(self, x, hidden, cell, encoder_outputs, encoder_hidden, encoder_cell):
         embedding = self.drop(x)
-        attn_weights = F.softmax(self.attn(torch.cat((embedding.repeat(encoder_hidden.shape[0],1,1), encoder_hidden),2)))
+        attn_weights = F.softmax(self.attn(torch.cat((embedding, encoder_hidden.unsqueeze(0)),-1)),dim=-1)
         encoder_outputs = encoder_outputs.squeeze(1)
         attn_applied = torch.mul(attn_weights, encoder_outputs)
         attn_applied = attn_applied.sum(0).unsqueeze(0)
         output = torch.cat((embedding, attn_applied), -1)
         output = self.attn_combine(output)
         output = F.relu(output)
-        outputs, (hidden, cell) = self.rnn(embedding, (hidden, cell))
+        outputs, (hidden, cell) = self.rnn(output, (hidden, cell))
         return outputs, hidden, cell
 
 
+class decoder2(nn.Module):
+    def __init__(self, embed_size, hidden_size, num_layers, p, vocab_size, encoder_seq_size):
+        super(decoder2, self).__init__()
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.embed_size = embed_size
+        self.vocab_size = vocab_size
+        self.drop = nn.Dropout(p)
+        self.embed = nn.Embedding(self.vocab_size + 1, embed_size)
+        self.rnn = nn.LSTM(embed_size, hidden_size, num_layers, dropout=p)
+        #ATTENTION
+        self.attn = nn.Linear(self.embed_size*2, encoder_seq_size)
+        self.attn_combine = nn.Linear(self.embed_size*2, self.embed_size)
+        #####
+        self.rnn = nn.LSTM(embed_size, embed_size, num_layers, dropout=p)
+        self.out = nn.Linear(self.embed_size, self.vocab_size)
+
+    def forward(self, x, hidden, cell, encoder_outputs, encoder_hidden, encoder_cell):
+        x = self.embed(x)
+        embedding = self.drop(x)
+        attn_weights = F.softmax(self.attn(torch.cat((embedding, encoder_hidden), -1)),dim=-1)
+        encoder_outputs = encoder_outputs.squeeze(1)
+        attn_applied = torch.mul((attn_weights.T).unsqueeze(-1), encoder_outputs)
+        attn_applied = attn_applied.sum(0).unsqueeze(0)
+        embedding = embedding.unsqueeze(0)
+        output = torch.cat((embedding, attn_applied), -1)
+        output = self.attn_combine(output)
+        output = F.relu(output)
+        output, (hidden, cell) = self.rnn(output, (hidden, cell))
+        output = F.softmax(self.out(output[0]), dim=-1)
+        return output, hidden, cell
+    
 class seq2seq(nn.Module):
-    def __init__(self, encoder, decoder):
+    def __init__(self, encoder, decoder1, decoder2):
         super(seq2seq, self).__init__()
         self.encoder = encoder
-        self.decoder = decoder
+        self.decoder1 = decoder1
+        self.decoder2 = decoder2
         self.softmax = nn.Softmax(dim=2)
-    def forward(self, source, target_size, target_embeddings):
+    def forward(self, source, target_size, dataset, pretraining):
         source = source.unsqueeze(0)
+        batch_size = source.shape[-1]
         encoder_outputs, encoder_hidden, encoder_cell = self.encoder(source)
         hidden = encoder_hidden[-1]
         cell = encoder_hidden[-1]
-        encoder_hidden = encoder_hidden[:,-1,:,:]
-        encoder_cell = encoder_cell[:,-1,:,:]
-        x = target_embeddings[0][0]
-        x = x.view(-1,1)
-        x = x@torch.ones(1, encoder_hidden.shape[-2]) # hidden.shape[1] <-- batch size
-        x = x.T
-        x = x. unsqueeze(0)
-        predictions = torch.zeros([target_size] + list(x.shape))
-        for i in range(1, target_size):
-            output, hidden, cell = self.decoder(x, hidden, cell, encoder_outputs, encoder_hidden, encoder_cell)
-            x = output
-            predictions[i] = output
+        encoder_hidden = encoder_hidden[-1,-1,:,:]
+        encoder_cell = encoder_cell[-1,-1,:,:]
+        
+        if pretraining:
+            x = dataset.concepts[0][0]
+            x = x.view(-1,1)
+            x = x@torch.ones(1, encoder_hidden.shape[-2]) # hidden.shape[1] <-- batch size
+            x = x.T
+            x = x. unsqueeze(0)
+            predictions = torch.zeros([target_size] + list(x.shape))
+            for i in range(1, target_size):
+                output, hidden, cell = self.decoder1(x, hidden, cell, encoder_outputs, encoder_hidden, encoder_cell)
+                x = output
+                predictions[i] = output
+        else:
+            predictions = torch.zeros(dataset[0][1][1].shape[0], len(charList), batch_size)
+            x = torch.tensor([len(charList)]).long()
+            x = x.repeat(batch_size)
+            for i in range(predictions.shape[1]):
+                output, hidden, cell = self.decoder2(x, hidden, cell, encoder_outputs, encoder_hidden, encoder_cell)
+                x = torch.argmax(output, dim=1)
+                predictions[i] = output.T
         return predictions
-
-
+    
+    
+    
 class Data(Dataset):
     def __init__(self):
-        with open('../data/tokens.pickle', 'rb') as f:
-            self.inp = pickle.load(f)
+        with open('../data/target_indexes.pickle', 'rb') as d:
+            self.target_indexes = pickle.load(d)
+        with open('../data/tokens.pickle', 'rb') as e:
+            self.inp = pickle.load(e)
         with open('../data/embeddings.pickle', 'rb') as f:
             concepts = pickle.load(f)
         self.concepts = torch.Tensor(concepts)
@@ -105,13 +151,13 @@ class Data(Dataset):
         for n, word in enumerate(self.vocab):
             word2index[word] = n
         self.word2index = word2index
-        
         self.len = len(self.inp)
+
     def __getitem__(self,index):
         x = self.inp[index]
         x = torch.from_numpy(x)
         x = x.int()
-        y = self.concepts[index]
+        y = self.concepts[index], self.target_indexes[index]
         return x, y
     def __len__(self):
         return self.len
@@ -124,85 +170,100 @@ class Data(Dataset):
         return expressions
     def exp2index(self, exp):
         tokens = nlp(exp)
-        indexes = [self.word2index[token] if token in self.vocab else random.randint(1, len(self.vocab)-1) for token in tokens]
+        indexes = [self.word2index[token.text] if token.text in self.vocab else random.randint(1, len(self.vocab)-1) for token in tokens]
         return indexes
+    
 
+    
 
+#DATA SPLIT
+batch_size = 4
 dataset= Data()
-#train_len = int(len(dataset)*(2/3))
 train_len = int(len(dataset)*(2/3))
 test_len = len(dataset) - train_len
 train_data, val_data = random_split(dataset, [train_len, test_len])
-trainloader = DataLoader(dataset=train_data, batch_size=2)
 
-encoderInpLen = dataset[2][0].shape[0]
+trainloader = DataLoader(dataset=train_data, batch_size=batch_size)
 
 embed_dimEnc = 50
 embed_dimDec = len(dataset.concepts[0][0])  #target vector dimension
 
+charList = string.printable
+encoder_seq_size = dataset[0][0].shape[0]
+
 #THE MODEL
 enc = encoder(len(dataset.vocab), embed_dimEnc, embed_dimDec, 3, 0.5)
-dec = decoder(embed_dimDec, embed_dimDec, 3, 0.5,encoderInpLen)
+dec1 = decoder1(embed_dimDec, embed_dimDec, 3, 0.5)
+dec2 = decoder2(embed_dimDec, len(charList), 3, 0.5, len(charList), encoder_seq_size)
+
+
 device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = seq2seq(enc, dec)
+model = seq2seq(enc, dec1, dec2)
 try:
-	model.load_state_dict(torch.load('../models/model.pth', map_location="cuda:0"))
+    model.load_state_dict(torch.load('../models/model.pth'))
+    
 except:
-	print("no model is saved yet")
+    print("no model is saved yet")
 model.to(device)
 #TRAINING
 #Hyperparameters
-learning_rate = 0.01
+learning_rate = 0.05
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 criterion = nn.CosineEmbeddingLoss()
 
-epochs=30
+epochs=25
+
 
 #Train the model
-for epoch in range(epochs):
-    LOSS = 0
-    yhat_previous = torch.ones(dataset[0:2][1].shape)
-    yhatlist = [yhat_previous, yhat_previous]
-    for n, (x,y) in enumerate(trainloader):
-        x = torch.transpose(x, 0,1)
-        y = torch.transpose(y, 0,1)
-        yhat = model(x, y.shape[0], dataset.concepts)
-        yhat = yhat.squeeze(1)
-        y = y.view(yhat.shape)
-        optimizer.zero_grad()
-        loss = criterion(torch.flatten(yhat), torch.flatten(y), torch.tensor(1))
-        yhat_prev1 = yhatlist[-1]
-        yhat_prev2 = yhatlist[-2]
-        loss +=2*criterion(torch.flatten(yhat), torch.flatten(yhat_prev1), torch.tensor(-1))
-        loss +=2*criterion(torch.flatten(yhat), torch.flatten(yhat_prev2), torch.tensor(-1))
-        loss = loss/5
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
-        optimizer.step()
-        LOSS += loss
-        yhatlist.append(yhat)
+def pre_train(epoch, learning_rate, optimizer, criterion):
+    for epoch in range(epochs):
+        LOSS = 0
+        for n, (x,y) in enumerate(trainloader):
+            y = y[0]
+            x = torch.transpose(x, 0,1)
+            y = torch.transpose(y, 0,1)
+            yhat = model(x, y.shape[0], dataset, pretraining=True)
+            yhat = yhat.squeeze(1)
+            y = y.view(yhat.shape)
+            optimizer.zero_grad()
+            loss = criterion(torch.flatten(yhat), torch.flatten(y), torch.tensor(1))
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
+            optimizer.step()
+            LOSS += loss
     print("in epoch {}, the loss is {}".format(epoch, LOSS))
+
+
+pre_train(epochs, learning_rate, optimizer, criterion)
+
+
+def train(epochs, learning_rate, optimizer, criterion):
+    for epoch in range(epochs):
+        LOSS = 0
+        for n, (x, y) in enumerate(trainloader):
+            y = y[1]
+            x = torch.transpose(x, 0, 1)
+            y = torch.transpose(y, 0, 1)
+            yhat = model(x , y.shape[0], dataset, pretraining=False)
+            yhat = yhat.squeeze(1)
+            optimizer.zero_grad()
+            loss = criterion(yhat, y)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
+            optimizer.step()
+            LOSS += loss
+    print("in epoch {}, the loss is {}".format(epoch, LOSS))
+
+    
+criterion2 = nn.CrossEntropyLoss()
+train(epochs, learning_rate, optimizer, criterion2)
 
 torch.save(model.state_dict(), '../models/model.pth')
 
 #TRANSLATION
-concepts = torch.flatten(dataset.concepts, start_dim=0, end_dim=-2)
 
-
-eps = 1e-6
-absVal = lambda x: LA.norm(x.float(),dim=-1).unsqueeze(-1)
-similarity = lambda x, y: x/(absVal(x) + eps)@torch.transpose((y/(absVal(y)+eps)),-1,-2)
-
-
-sim = similarity(yhat,concepts)
-simMatrix = torch.argmax(sim,-1)
-
-y1 = torch.transpose(dataset[4][1],0,1)
-yhat = model(x, y1.shape[0], dataset.concepts)
-yhat = yhat.squeeze(1)
-
-translation = dataset.index2exp((simMatrix.T).tolist())[1]
-print(translation)
-
-
-
+def translate(x):
+    expression = ""
+    for n in x:
+        exp += charList[n[0]]
+    return expression
