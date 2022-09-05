@@ -74,7 +74,7 @@ them just be kids. Amy Katz Narrates. 
 </div>
 <div>
     <h3>Target:</h3> Corresponding Discourse Representation Structure from the Gröningen Meaning Bank
-    <div style="border: 1px solid black; padding:2%; overflow: scroll;height:30rem;">
+    <div style="border: 1px solid black; padding:2%; overflow: scroll; height:30rem;">
         <ul>
             <li>discourse 1 t5 now</li>
             <li>discourse 1 x3 chrysler</li>
@@ -287,50 +287,37 @@ them just be kids. Amy Katz Narrates. 
     <div style="border: 1px dashed white; text-align:center; padding:4% 0% 0% 2%;"> &rarr;</div>
     <div style="border: 1px solid white; text-align:center;padding:2% 0% 0% 0%; margin:2%;">Contextual vectors (Concepts)</div>
 </div>
+<h3>Pretraining</h3>
 <div>
-    <h3>The idea behind contextual target vectors </h3>
+    <div style="display:flex; padding:2%;">
+    <div style="border: 1px dashed white; text-align:center; padding:2% 2% 0% 0%; color:gray;">Text <br> input <br> </div>
+    <div style="border: 1px dashed white; text-align:center; padding:4% 2% 0% 0%; color:gray;"> &rarr;</div>
+    <div style="border: 1px solid gray; text-align:center; padding:4%; color:gray;">Encoder </div>
+    <div style="border: 1px dashed white; text-align:center; padding:4% 2% 0% 0%;"> &rarr;</div>
+    <div style="border: 1px dashed white; text-align:center; padding:2% 2% 0% 0%;">Decoder1 <br> + <br> Text </div>
+    <div style="border: 1px dashed white; text-align:center; padding:4% 2% 0% 0%;"> &rarr;</div>
+    <div style="border: 1px solid black; text-align:center; padding:2%;">Target: Contextual word vectors (Concepts) <br/> nlp = spacy.load("en_core_web_trf") </div>
+</div>
+
+<h3>Training</h3>
+<div>
+    <div style="display:flex; padding:2%;">
+    <div style="border: 1px dashed white; text-align:center; padding:2% 2% 0% 0%; color:gray;">Text <br> input <br> </div>
+    <div style="border: 1px dashed white; text-align:center; padding:4% 2% 0% 0%; color:gray;"> &rarr;</div>
+    <div style="border: 1px solid gray; text-align:center; padding:4%; color:gray;">Encoder </div>
+    <div style="border: 1px dashed white; text-align:center; padding:4% 2% 0% 0%;"> &rarr;</div>
+    <div style="border: 1px dashed white; text-align:center; padding:2% 2% 0% 0%;">Decoder2 <br> + <br> Text </div>
+    <div style="border: 1px dashed white; text-align:center; padding:4% 2% 0% 0%;"> &rarr;</div>
+    <div style="border: 1px solid black; text-align:center; padding:2%;">DRS expressions <br/> char by char </div>
+</div>
+</div>
+
+<div>
+    <h3>The idea behind pretraining (decoder1) </h3>
     <p> The reason I use contextual vectors instead of discrete symbols ("DISCOURSE", "NOW", "NEUTER", etc.) as targets is to capture the structural relations in the target space. </p>
     <p>
         In the softmax-based model, the size of the last vector is the vocabulary. 
     </div>
 </div>
-<div>
-<h2>Output sequence</h2>
-<p> yhat @ concepts.T results in the similarity matrix <br/> then get the index of maximum elements </p>
-<div style="display:flex; padding:5px;">
-    <div style="font-size:40px; padding:5px;"> ( </div>
-    <div style="padding: 0.5% 0 0 0;">yhat</div>
-    <div style="font-size:40px; padding:5px;"> ) </div>
-    <div style="font-size:40px; padding:5px;"> ( </div>
-    <div style="padding: 0.5% 0 0 0;">concepts</div>
-    <div style="font-size:40px; padding:5px;"> ) </div>
-    <div style="padding: 0.5% 0 0 0;"> = </div>
-    <div style="font-size:40px; padding:5px;"> ( </div>
-    <div style="padding: 0.5% 0 0 0;">similarity matrix</div>
-    <div style="font-size:40px; padding:5px;"> ) </div>
-    <div style="padding: 0.5% 0 0 0;"> &rarr; </div>
-    <div style="font-size:20px; padding:5px;"> [ </div>
-    <div style="padding: 0.5% 0 0 0;">max elements indexes</div>
-    <div style="font-size:20px; padding:5px;"> ] </div>
-</div>
-</div>
-<div>
-<h2>Needs revision!</h2>
-The oncepts matrix needs to be revised for <u>two reasons</u>! 
-<ol>
-    <li>It is too big even for such a small model. 
-        <ul>
-            <li>
-                Dimensionality reduction techniques, Fourier transformations, and autoencoders may be used to extract the key information.
-            </li>
-        </ul>
-    </li>
-    <li>Contextual embeddings extracted from a set of documents may not be sufficient to represent human concepts. Even if it is, it may be difficult to identify the concepts represented.
-        <ul>
-            <li>
-                Distributed version of a concept dictionary (e.g. WordNET) may be an alternative..
-            </li>
-        </ul>
-    </li>
-</ol>
-</div>
+
+
